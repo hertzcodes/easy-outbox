@@ -2,6 +2,7 @@ package pebble
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/hertzcodes/easy-outbox/go/internal/bindings"
@@ -22,11 +23,11 @@ func New(path string) (*PebbleStorage, error) {
 
 func (p *PebbleStorage) Write(key string, value any) error {
 
-	b, err := utils.MarshalGob(value)
+	b, err := utils.Marshal(value)
 	if err != nil {
 		return err
 	}
-	return p.db.Set([]byte(key), b, pebble.Sync)
+	return p.db.Set([]byte(key), b, pebble.NoSync)
 }
 
 func (p *PebbleStorage) Read(key string) (interface{}, error) {
@@ -42,10 +43,34 @@ func (p *PebbleStorage) Read(key string) (interface{}, error) {
 	}
 	defer closer.Close()
 
+	// TODO: move storage to generic ones and fix this
 	var o any
-	return o, utils.UnmarshalGob(value, &o)
+	return o, utils.Unmarshal(value, &o)
+}
+
+func (p *PebbleStorage) ReadBulkKeys(amount int) []string {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: nil,
+	})
+	if err != nil {
+		// log the error
+		return nil
+	}
+	defer iter.Close()
+
+	var keys []string
+	cnt := 0
+	for iter.First(); iter.Valid() && cnt < amount; iter.Next() {
+		keys = append(keys, string(iter.Key()))
+		cnt++
+	}
+	return keys
 }
 
 func (p *PebbleStorage) Delete(key string) error {
-	return p.db.Delete([]byte(key), pebble.Sync)
+	return p.db.Delete([]byte(key), pebble.NoSync)
+}
+
+func (p *PebbleStorage) PrintMetrics() {
+	fmt.Println(p.db.Metrics())
 }

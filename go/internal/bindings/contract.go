@@ -11,4 +11,6 @@ type DB interface {
 	Write(key string, value any) error
 	Read(key string) (interface{}, error)
 	Delete(key string) error
+	ReadBulkKeys(amount int) []string
+	PrintMetrics()
 }
