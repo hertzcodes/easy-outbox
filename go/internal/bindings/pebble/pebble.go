@@ -3,6 +3,7 @@ package pebble
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/hertzcodes/easy-outbox/go/internal/bindings"
@@ -10,7 +11,8 @@ import (
 )
 
 type PebbleStorage struct {
-	db *pebble.DB
+	db      *pebble.DB
+	pointer []byte
 }
 
 func New(path string) (*PebbleStorage, error) {
@@ -18,7 +20,7 @@ func New(path string) (*PebbleStorage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PebbleStorage{db: db}, nil
+	return &PebbleStorage{db: db, pointer: nil}, nil
 }
 
 func (p *PebbleStorage) Write(key string, value any) error {
@@ -73,4 +75,28 @@ func (p *PebbleStorage) Delete(key string) error {
 
 func (p *PebbleStorage) PrintMetrics() {
 	fmt.Println(p.db.Metrics())
+}
+
+func (p *PebbleStorage) StreamKeys(ch chan string) {
+	go func() {
+		for {
+
+			iter, err := p.db.NewIter(nil)
+			if err != nil {
+				// log the error
+				// should not usually happen
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			for iter.First(); iter.Valid(); iter.Next() {
+				ch <- string(iter.Key())
+			}
+
+			iter.Close()
+			
+			// Small delay to prevent tight looping
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
 }

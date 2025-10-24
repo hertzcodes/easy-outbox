@@ -18,8 +18,8 @@ const (
 
 type OutBox struct {
 	db             bindings.DB
-	r_ch           chan []string // the channel for reads
-	d_ch           chan string   // the channel for deletions
+	r_ch           chan string // the channel for reads
+	d_ch           chan string // the channel for deletions
 	interval_count int
 	interval       time.Duration
 	once           sync.Once
@@ -41,27 +41,39 @@ func New(db DBType, path string) (*OutBox, error) {
 	}
 }
 
-func (o *OutBox) SetInterval(ch chan []string, t time.Duration, cnt int) error {
+// WithStream sets the channel for streaming keys. Must set a buffered channel to avoid blocking and too much writes.
+//
+// Example:
+//
+//     // Create a buffered channel
+//     ch := make(chan string, 100)
+//     
+//     // Set up the stream
+//     if err := outbox.WithStream(ch); err != nil {
+//         t.Fatal(err)
+//     }
+//     
+//     // Process keys
+//     for key := range ch {
+//         fmt.Println(key)
+//     }
+func (o *OutBox) WithStream(ch chan string) error {
 	o.once.Do(func() {
 		if ch == nil {
 			panic("nil channel was given")
 		}
+		if cap(ch) == 0 {
+			panic("channel is not buffered")
+		}
 		o.r_ch = ch
-		o.interval = t
-		o.interval_count = cnt
-		go func() {
-			for {
-				o.r_ch <- o.db.ReadBulkKeys(cnt)
-				time.Sleep(o.interval)
-			}
-		}()
+		o.db.StreamKeys(o.r_ch)
 	})
 	return nil
 }
 
 func (o *OutBox) GetMessages(count int) ([]string, error) {
 	if o.r_ch != nil {
-		return nil, errors.New("Can't use Bulk Message fetch when interval is on")
+		return nil, errors.New("Can't use Bulk Message fetch when stream is on")
 	}
 	return o.db.ReadBulkKeys(count), nil
 }

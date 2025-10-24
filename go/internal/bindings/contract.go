@@ -1,6 +1,8 @@
 package bindings
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	ErrNotFound         = errors.New("key not found in database")
@@ -12,5 +14,6 @@ type DB interface {
 	Read(key string) (interface{}, error)
 	Delete(key string) error
 	ReadBulkKeys(amount int) []string
+	StreamKeys(ch chan string)
 	PrintMetrics()
 }
